@@ -1,0 +1,2 @@
+data_path = './data/'
+results_path = './results/'
