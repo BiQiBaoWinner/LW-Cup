@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+import pickle
 
 try:
     from model import DeepLOB
@@ -13,19 +14,22 @@ except ImportError:
 
 class Predictor:
     def __init__(self) -> None:
-        pkl_path = os.path.join(os.path.dirname(__file__), 'best_model.pt')
+        # pkl_path = os.path.join(os.path.dirname(__file__), 'best_model.pt')
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        try:
-            ckpt = torch.load(pkl_path, map_location=self.device, weights_only=False)
-        except TypeError:
-            ckpt = torch.load(pkl_path, map_location=self.device)
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # try:
+        #     ckpt = torch.load(pkl_path, map_location=self.device, weights_only=False)
+        # except TypeError:
+        #     ckpt = torch.load(pkl_path, map_location=self.device)
 
-        self.meta = dict(ckpt.get("meta") or {})
-        nums = self.meta["num_classes_per_head"]
-        self.model = DeepLOB(list(nums)).to(self.device)
-        self.model.load_state_dict(ckpt["model_state"], strict=True)
-        self.model.eval()
+        # self.meta = dict(ckpt.get("meta") or {})
+        # nums = self.meta["num_classes_per_head"]
+        # self.model = DeepLOB(list(nums)).to(self.device)
+        # self.model.load_state_dict(ckpt["model_state"], strict=True)
+        # self.model.eval()
+        
+        with open(os.path.join(os.path.dirname(__file__), 'best_model.pkl'), 'rb') as f:
+            self.model = pickle.load(f)
 
     def predict(self, batches: list[pd.DataFrame]) -> list[list[int]]:
         """

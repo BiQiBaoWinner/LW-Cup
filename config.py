@@ -1,5 +1,5 @@
-data_path = '~/LWCUP/data/'
-results_path = '~/LWCUP/results/'
+data_path = '~/LWCUP/data'
+results_path = '~/LWCUP/results'
 
 tot_date_range = [str(i) for i in range(120)]
 train_beg = '0'
