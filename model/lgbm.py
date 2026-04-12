@@ -129,7 +129,7 @@ class LGBM():
             return auc
         
         study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
-        study.optimize(objective, n_trials=60, n_jobs=-1) 
+        study.optimize(objective, n_trials=10, n_jobs=-1) 
         
         best_params = study.best_params
         best_params.update({
@@ -160,17 +160,21 @@ class LGBM():
         return pred_label
     
     def evaluate(self, pred_label, true_label, pred_prob=None):
+        # 获取所有可能的类别标签，确保 log_loss 和指标计算一致
+        labels = np.unique(true_label.values.ravel())
+        
         if pred_prob is not None:
-            auc = roc_auc_score(true_label, pred_prob, multi_class='ovr')
+            auc = roc_auc_score(true_label, pred_prob, multi_class='ovr', labels=labels)
+            logloss = log_loss(true_label, pred_prob, labels=labels)
         else:
             # 如果没有概率
             auc = accuracy_score(true_label, pred_label) 
+            logloss = np.nan
             
         acc = accuracy_score(true_label, pred_label)
-        precision = precision_score(true_label, pred_label, average='weighted')
-        recall = recall_score(true_label, pred_label, average='weighted')
-        f1 = f1_score(true_label, pred_label, average='weighted')
-        logloss = log_loss(true_label, pred_label)
+        precision = precision_score(true_label, pred_label, average='weighted', zero_division=0)
+        recall = recall_score(true_label, pred_label, average='weighted', zero_division=0)
+        f1 = f1_score(true_label, pred_label, average='weighted', zero_division=0)
         
         eval_results = {
             "auc": auc,

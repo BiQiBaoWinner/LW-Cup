@@ -6,10 +6,10 @@ import pandas as pd
 import torch
 import pickle
 
-try:
-    from model import DeepLOB
-except ImportError:
-    from .model import DeepLOB
+# try:
+#     from model import DeepLOB
+# except ImportError:
+#     from .model import DeepLOB
 
 
 class Predictor:
@@ -31,7 +31,7 @@ class Predictor:
         with open(os.path.join(os.path.dirname(__file__), 'best_model.pkl'), 'rb') as f:
             self.model = pickle.load(f)
 
-    def predict(self, batches: list[pd.DataFrame]) -> list[list[int]]:
+    def predict_raw(self, batches: list[pd.DataFrame]) -> list[list[int]]:
         """
         返回: [[y_label0, y_label1, ...], ...]，与 batches 等长；各头 argmax 类下标 int，三分类时为 [0,1,2]。
         """
@@ -45,6 +45,12 @@ class Predictor:
         preds_per_head = [h.argmax(1).cpu().numpy() for h in heads]  # each: (B,)
         pred_matrix = np.stack(preds_per_head, axis=1)  # (B, K)
         return pred_matrix.astype(int).tolist()
+    
+    def predict(self, batches: list[pd.DataFrame]) -> list[list[int]]:
+        """
+        返回: [[y_label0, y_label1, ...], ...]，与 batches 等长；各头 argmax 类下标 int，三分类时为 [0,1,2]。
+        """
+        
 
 
 if __name__ == "__main__":
