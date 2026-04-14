@@ -54,9 +54,25 @@ class Predictor:
 
 
 if __name__ == "__main__":
+    import pickle
+    from factor_pool.pipeline import FactorPipeline
+    
+    cols = ["bid1", "ask1", "bsize1", "asize1"]
+    
     predictor = Predictor()
-    df = pd.read_csv("data/test.csv")
-    df = df[['n_midprice','n_bid1','n_bsize1','n_bid2','n_bsize2','n_bid3','n_bsize3','n_ask1','n_asize1','n_ask2']]
-    batches = [df.iloc[i:i+100] for i in range(0, len(df), 100)]
+    
+    with open(os.path.expanduser("~/LWCUP/results/test_data/test_data.pkl"), 'rb') as f:
+        test_data = pickle.load(f)
+    
+    test_data = [ d[cols] for d in test_data ]
+    
+    def _calc_factors(single_df):
+        
+        pip = FactorPipeline(single_df, date_range=None)
+        f = pip.load_factor_exposure(n_jobs=16)
+        
+        return f
+    
+    batches = []
     y = predictor.predict(batches[0:5])
     print(y)

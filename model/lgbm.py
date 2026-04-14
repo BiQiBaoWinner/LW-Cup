@@ -197,8 +197,8 @@ if __name__=='__main__':
     
     Task_label = 'label_20'
     factor_list = ['tick_OBI']
-    log_dir = f"{results_path}/lgbm_logs/"
-    save_dir = f"{results_path}/lgbm_models/"
+    log_dir = f"{results_path}/lgbm_logs"
+    save_dir = f"{results_path}/lgbm_models"
     seed = 42
     model = LGBM(Task_label, factor_list, log_dir, save_dir, seed)
     data_pack = model.DataPreparing(skip_nulldate=True)

@@ -31,6 +31,9 @@ class FactorPipeline:
     """
     def __init__(self, tick_df, date_range):
         self.tick_df = tick_df
+        
+        if date_range is None:
+            date_range = tick_df['date'].astype(str).unique().tolist()
         self.date_range = date_range
         
         self.daily_builder = DailyFactorPool(tick_df)
