@@ -7,7 +7,6 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from config import data_path, results_path
 from factor_pool.utils import tick_long_to_wide_, safe_divide
 
 # tick因子计算函数
@@ -29,6 +28,38 @@ def tick_Orderbook_Imbalance_single_day(tick_df):
     
     # 计算订单簿不平衡度
     imbalance = safe_divide(wide_bsize1 * wide_ask1 - wide_asize1 * wide_bid1, wide_bsize1 * wide_ask1 + wide_asize1 * wide_bid1)
+    
+    imbalance.index.name = 'timestamp'
+    imbalance.columns.name = 'sym'
+    
+    return imbalance
+
+def tick_Orderbook_Imbalance_single_day_v2(tick_df):
+    """订单簿不平衡度因子，版本2：直接在长格式数据上计算，不进行宽化
+
+    Args:
+        tick_df: 包含订单簿数据的DataFrame，必须包含以下列：
+            - 'bid1': 买一价
+            - 'bsize1': 买一量
+            - 'ask1': 卖一价
+            - 'asize1': 卖一量
+            - 'bid2': 买二价
+            - 'bsize2': 买二量
+            - 'ask2': 卖二价
+            - 'asize2': 卖二量
+    """
+    
+    wide_bid1 = tick_long_to_wide_(tick_df, 'bid1')
+    wide_bid2 = tick_long_to_wide_(tick_df, 'bid2')
+    wide_bsize1 = tick_long_to_wide_(tick_df, 'bsize1')
+    wide_bsize2 = tick_long_to_wide_(tick_df, 'bsize2')
+    wide_ask1 = tick_long_to_wide_(tick_df, 'ask1')
+    wide_ask2 = tick_long_to_wide_(tick_df, 'ask2')
+    wide_asize1 = tick_long_to_wide_(tick_df, 'asize1')
+    wide_asize2 = tick_long_to_wide_(tick_df, 'asize2')
+    
+    # 计算订单簿不平衡度
+    imbalance = safe_divide(wide_bsize1 * wide_ask1 + wide_bsize2 * wide_ask2 - wide_asize1 * wide_bid1 - wide_asize2 * wide_bid2, wide_bsize1 * wide_ask1 + wide_bsize2 * wide_ask2 + wide_asize1 * wide_bid1 + wide_asize2 * wide_bid2)
     
     imbalance.index.name = 'timestamp'
     imbalance.columns.name = 'sym'
@@ -91,12 +122,12 @@ class TickFactorPool:
 
         factor_pool = pd.concat(factor_frames, axis=1)
         factor_pool.index.name = 'timestamp'
-        factor_pool = factor_pool.stack(level='sym').swaplevel('timestamp', 'sym').sort_index()
+        factor_pool = factor_pool.stack(level='sym', future_stack=True).swaplevel('timestamp', 'sym').sort_index()
         
         return factor_pool
 
 if __name__ == "__main__":
-    
+    from config import results_path
     tot_tick_df = pd.read_parquet(f"{results_path}/merge_data/merge_data.parquet")
     
     date = '0'

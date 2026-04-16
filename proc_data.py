@@ -16,19 +16,27 @@ import pickle
 if __name__ == "__main__":
     
     concat_list = []
+    local_test_concat_list = []
     
-    for data_parquet in tqdm(os.listdir(os.path.expanduser(data_path)[:5]), desc="Processing parquet files", unit="file", leave=True):
+    for data_parquet in tqdm(os.listdir(os.path.expanduser(data_path))[:5], desc="Processing parquet files", unit="file", leave=True):
+        if data_parquet.endswith(".parquet"):
+            df = pd.read_parquet(os.path.join(os.path.expanduser(data_path), data_parquet))
+            local_test_concat_list.append(df)
+            
+        else:
+            print(f"Skipping non-parquet file: {data_parquet}")
+            
+    with open(os.path.join(os.path.expanduser(results_path), "test_data/test_data.pkl"), "wb") as f:
+        pickle.dump(local_test_concat_list, f)
+    
+    for data_parquet in tqdm(os.listdir(os.path.expanduser(data_path))[:5], desc="Processing parquet files", unit="file", leave=True):
         if data_parquet.endswith(".parquet"):
             df = pd.read_parquet(os.path.join(os.path.expanduser(data_path), data_parquet))
             concat_list.append(df)
             
         else:
             print(f"Skipping non-parquet file: {data_parquet}")
-            
     
-    with open(os.path.join(os.path.expanduser(results_path), "test_data/test_data.pkl"), "wb") as f:
-        pickle.dump(concat_list, f)
-    aaa
     # Concatenate all DataFrames
     final_df = pd.concat(concat_list, ignore_index=True)
     

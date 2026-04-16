@@ -29,11 +29,12 @@ from factor_pool.pipeline import FactorPipeline
 
 
 class LGBM():
-    def __init__(self, Task_label: str, factor_list: List[str], log_dir: str, save_dir: str, seed: int):
+    def __init__(self, Task_label: str, factor_registry: dict, log_dir: str, save_dir: str, seed: int):
         self.task = [Task_label]
         self.log_dir = log_dir
         self.save_dir = save_dir
-        self.factor_list = factor_list
+        self.factor_list = list(factor_registry.keys())
+        self.factor_registry = factor_registry
         self.seed = seed 
         self.binary_auc = 0
     
@@ -49,12 +50,15 @@ class LGBM():
         tot_tick_df = pd.read_parquet(f"{results_path}/merge_data/merge_data.parquet")
         
         train_pip = FactorPipeline(tot_tick_df, date_range=train_dates)
+        train_pip.Tick_Factor_Pool.registry = self.factor_registry
         train_f = train_pip.load_factor_exposure(n_jobs=16)
         
         valid_pip = FactorPipeline(tot_tick_df, date_range=valid_dates)
+        valid_pip.Tick_Factor_Pool.registry = self.factor_registry
         valid_f = valid_pip.load_factor_exposure(n_jobs=16)
         
         test_pip = FactorPipeline(tot_tick_df, date_range=test_dates)
+        test_pip.Tick_Factor_Pool.registry = self.factor_registry
         test_f = test_pip.load_factor_exposure(n_jobs=16)
         
         if skip_nulldate:
@@ -194,11 +198,18 @@ class LGBM():
 
     
 if __name__=='__main__':
+    import os 
     
     Task_label = 'label_20'
     factor_list = ['tick_OBI']
-    log_dir = f"{results_path}/lgbm_logs"
-    save_dir = f"{results_path}/lgbm_models"
+    log_dir = os.path.expanduser(f"{results_path}/lgbm_logs")
+    save_dir = os.path.expanduser(f"{results_path}/lgbm_models")
+    
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
     seed = 42
     model = LGBM(Task_label, factor_list, log_dir, save_dir, seed)
     data_pack = model.DataPreparing(skip_nulldate=True)

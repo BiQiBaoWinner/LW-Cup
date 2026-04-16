@@ -1,3 +1,10 @@
+import os
+import sys
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+from factor_pool.tick_factor_pool import *
+
 data_path = '~/LWCUP/data'
 results_path = '~/LWCUP/results'
 
@@ -29,6 +36,18 @@ ob_cols_derive2 = ['bid_mean', 'ask_mean', 'bsize_mean', 'asize_mean', 'cumsprea
 
 # 'avgbid', 'avgask', 'totalbsize', 'totalasize' 是千档
 ob_cols_pro = ['avgbid', 'avgask', 'totalbsize', 'totalasize', 'lb_intst', 'la_intst', 'mb_intst', 'ma_intst', 'cb_intst', 'ca_intst', 'lb_ind', 'la_ind', 'mb_ind', 'ma_ind', 'cb_ind', 'ca_ind', 'lb_acc', 'la_acc', 'mb_acc', 'ma_acc', 'cb_acc', 'ca_acc']
+
+FACTORS = {
+    'tick_OBI': {
+        'factor_func': tick_Orderbook_Imbalance_single_day,
+        'need_cols': ['bid1', 'ask1', 'bsize1', 'asize1']
+    },
+    'tick_OBI_v2':{
+        'factor_func': tick_Orderbook_Imbalance_single_day_v2,
+        'need_cols': ['bid1', 'ask1', 'bsize1', 'asize1', 'bid2', 'ask2', 'bsize2', 'asize2']
+    }
+}
+
 
 if __name__ == "__main__":
     

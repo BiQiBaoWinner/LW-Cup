@@ -30,33 +30,40 @@ class FactorPipeline:
     2. TickFactorPool (高频因子：保持 tick 原始粒度)
     """
     def __init__(self, tick_df, date_range):
-        self.tick_df = tick_df
+        if isinstance(tick_df, pd.DataFrame):
+            print("输入为 DataFrame，直接使用")
+            self.tick_df = tick_df
+        elif isinstance(tick_df, list):
+            print(f"输入为 DataFrame 列表，长度: {len(tick_df)}，正在合并...")
+            self.tick_df = pd.concat(tick_df, axis=0)
+        else:
+            raise ValueError("tick_df 应为 DataFrame 或 DataFrame 列表")
         
         if date_range is None:
-            date_range = tick_df['date'].astype(str).unique().tolist()
+            date_range = self.tick_df['date'].astype(str).unique().tolist()
         self.date_range = date_range
-        
-        self.daily_builder = DailyFactorPool(tick_df)
-        self.tick_builder = TickFactorPool(tick_df)
+
+        self.Daily_Factor_Pool = DailyFactorPool(self.tick_df)
+        self.Tick_Factor_Pool = TickFactorPool(self.tick_df)
 
         self._setup_default_factors()
         
         # 将 keys 转换为 list 以便能够被 pickle (解决 ProcessPoolExecutor 报错)
-        self.d_factors = list(self.daily_builder.registry.keys())
-        self.t_factors = list(self.tick_builder.registry.keys())
+        self.d_factors = list(self.Daily_Factor_Pool.registry.keys())
+        self.t_factors = list(self.Tick_Factor_Pool.registry.keys())
 
     def _setup_default_factors(self):
         """
         预定义可选的因子及其对应的计算函数和依赖列。
         """
-        self.daily_builder.register_factor(
+        self.Daily_Factor_Pool.register_factor(
             factor_name='OBI_mean',
             factor_func=daily_prevday_tick_OBI_mean,
             need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
         )
         
         # 注册 Tick 因子
-        self.tick_builder.register_factor(
+        self.Tick_Factor_Pool.register_factor(
             factor_name='tick_OBI',
             factor_func=tick_Orderbook_Imbalance_single_day,
             need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
@@ -72,7 +79,7 @@ class FactorPipeline:
             return pd.DataFrame()
 
         builder = TickFactorPool(day_tick)
-        builder.registry = self.tick_builder.registry
+        builder.registry = self.Tick_Factor_Pool.registry
         
         return builder.build_factor_pool()
 
@@ -83,7 +90,7 @@ class FactorPipeline:
         all_dates_data = []
         for date in target_dates:
             try:
-                daily_pool = self.daily_builder.build_daily_factor_pool(target_date=date)
+                daily_pool = self.Daily_Factor_Pool.build_daily_factor_pool(target_date=date)
                 if not daily_pool.empty:
                     all_dates_data.append(daily_pool)
             except Exception as e:
@@ -128,15 +135,15 @@ class FactorPipeline:
                 # 提交任务时，调用全局函数并只传入 registry 和该日切片数据
                 # 这样 Pickle 序列化时只处理当前日期的数据，开销大幅减小
                 future_to_date = {
-                    executor.submit(_calc_single_day_tick_panel, day_data, self.tick_builder.registry): date 
+                    executor.submit(_calc_single_day_tick_panel, day_data, self.Tick_Factor_Pool.registry): date 
                     for date, day_data in tasks
                 }
-                
                 # 使用 tqdm 包装 as_completed
                 for future in tqdm(as_completed(future_to_date), total=len(future_to_date), desc="并行计算因子"):
                     date = future_to_date[future]
                     try:
                         panel = future.result()
+                        # print(panel)
                         if not panel.empty:
                             all_panels.append(panel)
                     except Exception as e:
