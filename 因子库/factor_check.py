@@ -1,0 +1,27 @@
+import pandas as pd
+df1 = pd.read_pickle("/home/linyuchang/wcp/model/良文杯/second/selected_factor_label_5.pkl")
+df2 = pd.read_pickle("/home/linyuchang/wcp/model/良文杯/second/selected_factor_label_10.pkl")
+df3 = pd.read_pickle("/home/linyuchang/wcp/model/良文杯/second/selected_factor_label_20.pkl")
+df4 = pd.read_pickle("/home/linyuchang/wcp/model/良文杯/second/selected_factor_label_40.pkl")
+df5 = pd.read_pickle("/home/linyuchang/wcp/model/良文杯/second/selected_factor_label_60.pkl")
+
+intersection = list(set(df1) & set(df2)& set(df3)& set(df4)& set(df5))
+
+df1_unique = list(set(df1)-set(intersection))
+df2_unique = list(set(df2)-set(intersection))
+df3_unique = list(set(df3)-set(intersection))
+df4_unique = list(set(df4)-set(intersection))
+df5_unique = list(set(df5)-set(intersection))
+print("================")
+print(f"共有因子数{len(intersection)}")
+print(f"label_5特有因子数{len(df1_unique)}")
+print(f"label_10特有因子数{len(df2_unique)}")
+print(f"label_20特有因子数{len(df3_unique)}")
+print(f"label_40特有因子数{len(df4_unique)}")
+print(f"label_60特有因子数{len(df5_unique)}")
+
+print(f"label_5日度因子数{sum(1 for feature in df1 if "decay" in feature)}")
+print(f"label_10日度因子数{sum(1 for feature in df2 if "decay" in feature)}")
+print(f"label_20日度因子数{sum(1 for feature in df3 if "decay" in feature)}")
+print(f"label_40日度因子数{sum(1 for feature in df4 if "decay" in feature)}")
+print(f"label_60日度因子数{sum(1 for feature in df5 if "decay" in feature)}")

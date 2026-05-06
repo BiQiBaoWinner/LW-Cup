@@ -9,7 +9,7 @@ from config import results_path, FACTORS
 
 if __name__ == "__main__":
 
-    Task_label = 'label_20'
+    Task_label = 'label_5'
     factor_registry = FACTORS
     log_dir = os.path.expanduser(f"{results_path}/lgbm_logs")
     save_dir = os.path.expanduser(f"{results_path}/lgbm_models")

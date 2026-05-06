@@ -137,7 +137,7 @@ class FactorEval:
             
             ret_df = pd.concat(self.tick_df, ignore_index=True)[['sym', 'date', 'timestamp', 'midprice']].copy()
         
-        ret_df.loc[:, 'ret_lead'] = ret_df.groupby(['sym', 'date'])['midprice'].shift(-20) / ret_df['midprice'] - 1
+        ret_df.loc[:, 'ret_lead'] = ret_df.groupby(['sym', 'date'])['midprice'].shift(-int(self.target.split('_')[1])) / ret_df['midprice'] - 1
         
         ret_df = ret_df.replace([np.inf, -np.inf], np.nan)
         
@@ -156,13 +156,18 @@ if __name__ == "__main__":
     with open(f"{os.path.expanduser(results_path)}/merge_data/null_sym_date_cols.json", 'r') as f:
         null_sym_date_cols = json.load(f)
     
-    
     null_date0 = list(null_sym_date_cols['0'].keys()) if '0' in null_sym_date_cols else []
     null_date1 = list(null_sym_date_cols['1'].keys()) if '1' in null_sym_date_cols else []
+    null_date2 = list(null_sym_date_cols['2'].keys()) if '2' in null_sym_date_cols else []
+    null_date3 = list(null_sym_date_cols['3'].keys()) if '3' in null_sym_date_cols else []
+    null_date4 = list(null_sym_date_cols['4'].keys()) if '4' in null_sym_date_cols else []
         
-    tick_df = tick_df[((tick_df['sym'] == '0') | (tick_df['sym'] == '1')) & ~((tick_df['date'].isin(null_date0)) | (tick_df['date'].isin(null_date1)))]
+    tick_df = tick_df[ ~((tick_df['date'].isin(null_date0)) | (tick_df['date'].isin(null_date1)) | (tick_df['date'].isin(null_date2)) | (tick_df['date'].isin(null_date3)) | (tick_df['date'].isin(null_date4))) ]
     
-    factor_eval = FactorEval(tick_df)
+    factor_eval = FactorEval(tick_df, target='label_5')
     ret = factor_eval.eval_all_factors()
+    
+    with open(os.path.expanduser(f"{results_path}/factor_eval_results.json"), 'w') as f:
+        json.dump(ret, f, indent=4)
     
     print(ret)

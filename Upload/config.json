@@ -1,6 +1,0 @@
-{
-    "python_version": "3.11",
-    "batch": 1024,
-    "feature": ["bid1", "ask1", "bsize1", "asize1"],
-    "label": ["label_20"]
-}

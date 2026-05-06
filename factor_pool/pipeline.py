@@ -8,8 +8,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from factor_pool.daily_factor_pool import DailyFactorPool, daily_prevday_tick_OBI_mean
-from factor_pool.tick_factor_pool import TickFactorPool, tick_Orderbook_Imbalance_single_day
+from factor_pool.daily_factor_pool import DailyFactorPool
+from factor_pool.tick_factor_pool import TickFactorPool, tick_Volume_Amount_Orderbook_Imbalance_single_day
 
 def _calc_single_day_tick_panel(day_tick, registry):
     """
@@ -56,16 +56,16 @@ class FactorPipeline:
         """
         预定义可选的因子及其对应的计算函数和依赖列。
         """
-        self.Daily_Factor_Pool.register_factor(
-            factor_name='OBI_mean',
-            factor_func=daily_prevday_tick_OBI_mean,
-            need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
-        )
+        # self.Daily_Factor_Pool.register_factor(
+        #     factor_name='OBI_mean',
+        #     factor_func=daily_prevday_tick_OBI_mean,
+        #     need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
+        # )
         
         # 注册 Tick 因子
         self.Tick_Factor_Pool.register_factor(
             factor_name='tick_OBI',
-            factor_func=tick_Orderbook_Imbalance_single_day,
+            factor_func=tick_Volume_Amount_Orderbook_Imbalance_single_day,
             need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
         )
 
@@ -131,7 +131,9 @@ class FactorPipeline:
                     # 只保存必要的元组：(日期, 该日数据切片)
                     tasks.append((date, day_data))
 
-            with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+            # 获取 CPU 核心数，设置合理的 max_workers 上限，避免过度并行导致性能下降
+            max_w = max(n_jobs, os.cpu_count() or 1)
+            with ProcessPoolExecutor(max_workers=max_w) as executor:
                 # 提交任务时，调用全局函数并只传入 registry 和该日切片数据
                 # 这样 Pickle 序列化时只处理当前日期的数据，开销大幅减小
                 future_to_date = {
