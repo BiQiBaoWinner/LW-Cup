@@ -32,7 +32,7 @@ def tick_long_to_wide_(long_df, col):
         long_df['Ndate'] = pd.to_datetime(long_df['date'].astype(int), unit='D', origin=pd.Timestamp('2020-01-01'))
         long_df['timestamp'] = pd.to_datetime(long_df['Ndate'].dt.strftime('%Y-%m-%d') + ' ' + long_df['time'].astype(str), format='%Y-%m-%d %H:%M:%S')
     
-    long_df.loc[:, col] = pd.to_numeric(long_df[col], errors='coerce')
+    long_df[col] = pd.to_numeric(long_df[col], errors='coerce')
     wide_df = long_df.pivot(index='timestamp', columns=['sym'], values=col)
     
     return wide_df

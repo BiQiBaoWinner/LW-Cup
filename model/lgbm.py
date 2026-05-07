@@ -29,7 +29,7 @@ from factor_pool.pipeline import FactorPipeline
 
 
 class LGBM():
-    def __init__(self, Task_label: str, factor_registry: dict, log_dir: str, save_dir: str, seed: int):
+    def __init__(self, Task_label: str, factor_registry: dict, log_dir: str, save_dir: str, seed: int, sft=False):
         self.task = [Task_label]
         self.log_dir = log_dir
         self.save_dir = save_dir
@@ -37,6 +37,7 @@ class LGBM():
         self.factor_registry = factor_registry
         self.seed = seed 
         self.binary_auc = 0
+        self.sft = sft
     
     def DataPreparing(self, skip_nulldate = True):
         '''
@@ -94,15 +95,7 @@ class LGBM():
         
         return data_pack
     
-    def fit_model(self, seed):
-        
-        train_feature = self.train_x.loc[:, self.factor_list ].copy()
-        train_label = self.train_y.loc[:, self.task]
-        valid_feature = self.valid_x.loc[:, self.factor_list ].copy()
-        valid_label = self.valid_y.loc[:, self.task]
-        test_feature = self.test_x.loc[:, self.factor_list ].copy()
-        test_label = self.test_y.loc[:, self.task]
-        
+    def tough_tuning_hyper(self, train_feature, train_label, valid_feature, valid_label, seed):
         def objective(trial):
             params = {
                 "objective": "multiclass",
@@ -110,52 +103,182 @@ class LGBM():
                 "device": "gpu",
                 "metric": "multi_logloss",
                 "num_class": len(np.unique(train_label.values.ravel())),
-                "reg_lambda": trial.suggest_float("L2 regular", 1e-1, 20),
-                # "reg_alpha": trial.suggest_float("L1 regular", 1e-1, 10),
-                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1e-1, log=True),
-                "n_estimators": trial.suggest_int("n_estimators", 200, 600),
-                "max_depth": trial.suggest_categorical("max_depth", [6, 10, 20, 30]),
-                "num_leaves": trial.suggest_categorical("num_leaves", [11, 21, 31, 41, 61, 91, 121, 151, 181]),
-                "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "min_child_samples": trial.suggest_categorical("min_child_samples", [150, 200, 250, 300]),
-                "min_split_gain": trial.suggest_categorical("min_split_gain", [0.05, 0.1, 0.5, 1, 2]),
-                "min_child_weight": trial.suggest_float("min_child_weight", 1e-4, 1e-2, log=True),
+                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.1, log=True),
+                # 正则化
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-2, 50, log=True),
+                # 可选：开启 L1 正则化，有时对稀疏特征有效
+                # "reg_alpha": trial.suggest_float("reg_alpha", 1e-2, 10, log=True),
+                # 树结构：
+                "num_leaves": trial.suggest_int("num_leaves", 15, 200),
+                # 采样率
+                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+                # 分裂约束
+                "min_child_samples": trial.suggest_categorical("min_child_samples", [20, 50, 100, 150]),
+                "min_split_gain": trial.suggest_categorical("min_split_gain", [0.0, 0.01, 0.05]),
+
+                "max_depth": -1, # 不限制深度，由 num_leaves 控制
+                "verbose": -1,
             }
-            model = lightgbm.LGBMClassifier(**params)
+            model = lightgbm.LGBMClassifier(**params, n_estimators=1000)
             model.fit(
                 train_feature, train_label.values.ravel(),
                 eval_set=[(valid_feature, valid_label.values.ravel())],
-                callbacks=[early_stopping(stopping_rounds=30, verbose=-1)],
+                callbacks=[early_stopping(stopping_rounds=50, verbose=-1)],
                 eval_metric="multi_logloss")
-            val_pred_prob = model.predict_proba(valid_feature)
+            val_pred_prob = model.predict_proba(valid_feature, num_iteration=model.best_iteration_)
             auc = roc_auc_score(valid_label, val_pred_prob, multi_class='ovr')
             return auc
         
-        study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner())
-        study.optimize(objective, n_trials=10, n_jobs=-1) 
+        study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner(n_warmup_steps=5))
+        study.optimize(objective, n_trials=20, n_jobs=1)
         
-        best_params = study.best_params
-        best_params.update({
-            "objective": "multiclass",
-            "random_state": seed,
-            "device": "gpu",
-            "metric": "multi_logloss",
-            "num_class": len(np.unique(train_label.values.ravel())),
-        })
-        
-        self.best_model = lightgbm.LGBMClassifier(**best_params)
-        self.best_model.fit(
-            train_feature, train_label.values.ravel(),
-            eval_set=[(valid_feature, valid_label.values.ravel())],
-            callbacks=[early_stopping(stopping_rounds=30, verbose=-1)],
-            eval_metric="multi_logloss")
+        return study
+    
+    def soft_tuning_hyper(self, train_feature, train_label, valid_feature, valid_label, seed):
+        unique_classes = np.unique(train_label.values.ravel())
+        if len(unique_classes) != 2:
+            raise ValueError(f"Expected exactly 2 classes for binary classification, got {len(unique_classes)}.")
 
-        test_pred_label = self.best_model.predict(test_feature)
-        test_pred_prob = self.best_model.predict_proba(test_feature)
-        print(f"Performance on Test Set:{self.evaluate(test_pred_label, test_label, test_pred_prob)}")
-        print(f"Confusion Matrix:\n{pd.crosstab(test_label.values.ravel(), test_pred_label, rownames=['True'], colnames=['Predicted'])}")
-        self.save_model(f"{self.save_dir}/lgbm_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pkl")
+        def objective(trial):
+            params = {
+                "objective": "binary",
+                "random_state": seed,
+                "device": "gpu",
+                "metric": "binary_logloss",
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-2, 50, log=True),
+                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.1, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 15, 200),
+                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+                "min_child_samples": trial.suggest_categorical("min_child_samples", [20, 50, 100, 150]),
+                "min_split_gain": trial.suggest_categorical("min_split_gain", [0.0, 0.01, 0.05]),
+                "max_depth": -1,
+                "verbose": -1,
+            }
+            
+            model = lightgbm.LGBMClassifier(**params, n_estimators=1000)
+            model.fit(
+                train_feature, train_label.values.ravel(),
+                eval_set=[(valid_feature, valid_label.values.ravel())],
+                callbacks=[
+                    lightgbm.early_stopping(stopping_rounds=50, verbose=-1),
+                    lightgbm.log_evaluation(period=0)
+                ],
+                eval_metric="binary_logloss"
+            )
+            
+            val_pred_prob = model.predict_proba(valid_feature, num_iteration=model.best_iteration_)
+            auc = roc_auc_score(valid_label, val_pred_prob[:, 1])
+            return auc
+
+        study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner(n_warmup_steps=5))
+        study.optimize(objective, n_trials=20, n_jobs=1)
+        
+        return study
+    
+    def fit_model(self, seed):
+        train_feature = self.train_x.loc[:, self.factor_list].copy()
+        train_label = self.train_y.loc[:, self.task]
+        valid_feature = self.valid_x.loc[:, self.factor_list].copy()
+        valid_label = self.valid_y.loc[:, self.task]
+        test_feature = self.test_x.loc[:, self.factor_list].copy()
+        test_label = self.test_y.loc[:, self.task]
+
+        FINAL_N_ESTIMATORS = 2000
+        EARLY_STOPPING_ROUNDS = 50
+
+        if self.sft:
+            train_mask = train_label.values.ravel() != 1
+            valid_mask = valid_label.values.ravel() != 1
+            
+            train_feature = train_feature[train_mask]
+            train_label = train_label[train_mask].replace({2: 1})
+            valid_feature = valid_feature[valid_mask]
+            valid_label = valid_label[valid_mask].replace({2: 1})
+
+            if len(np.unique(train_label)) < 2:
+                raise ValueError("After filtering for SFT, less than 2 classes remain.")
+
+            study = self.soft_tuning_hyper(train_feature, train_label, valid_feature, valid_label, seed)
+            best_params = study.best_params
+            
+            final_params = {
+                "objective": "binary",
+                "random_state": seed,
+                "device": "gpu",
+                "metric": "binary_logloss",
+                "verbose": -1,
+                **best_params
+            }
+            
+            self.best_model = lightgbm.LGBMClassifier(**final_params, n_estimators=FINAL_N_ESTIMATORS)
+            self.best_model.fit(
+                train_feature, train_label.values.ravel(),
+                eval_set=[(valid_feature, valid_label.values.ravel())],
+                callbacks=[
+                    lightgbm.early_stopping(stopping_rounds=EARLY_STOPPING_ROUNDS, verbose=-1),
+                    lightgbm.log_evaluation(period=0)
+                ],
+                eval_metric="binary_logloss"
+            )
+            
+            best_iter = self.best_model.best_iteration_
+            test_pred_prob_raw = self.best_model.predict_proba(test_feature, num_iteration=best_iter)
+            
+            thres1, thres2 = 0.45, 0.65
+            prob_class_1 = test_pred_prob_raw[:, 1]
+            test_pred_label_adjusted = np.zeros_like(prob_class_1, dtype=int)
+            test_pred_label_adjusted[prob_class_1 >= thres2] = 2
+            test_pred_label_adjusted[(prob_class_1 > thres1) & (prob_class_1 < thres2)] = 1 
+
+            test_pred_label_hard = np.argmax(test_pred_prob_raw, axis=1)
+            test_pred_label_hard = np.where(test_pred_label_hard == 1, 2, 0)
+
+            original_test_label = test_label.values.ravel()
+            eval_mask = original_test_label != 1
+            if np.sum(eval_mask) > 0:
+                cm = pd.crosstab(original_test_label[eval_mask], test_pred_label_hard[eval_mask], rownames=['True'], colnames=['Predicted'])
+                print(f"Performance on Test Set (Hard Pred, excluding label 1):\n{cm}")
+                cm_adj = pd.crosstab(original_test_label[eval_mask], test_pred_label_adjusted[eval_mask], rownames=['True'], colnames=['Predicted'])
+                print(f"Confusion Matrix Adjusted ({thres1}, {thres2}):\n{cm_adj}")
+
+        else:
+            study = self.tough_tuning_hyper(train_feature, train_label, valid_feature, valid_label, seed)
+            best_params = study.best_params
+            
+            final_params = {
+                "objective": "multiclass",
+                "random_state": seed,
+                "device": "gpu",
+                "metric": "multi_logloss",
+                "num_class": len(np.unique(train_label.values.ravel())),
+                "verbose": -1,
+                **best_params
+            }
+            
+            self.best_model = lightgbm.LGBMClassifier(**final_params, n_estimators=FINAL_N_ESTIMATORS)
+            self.best_model.fit(
+                train_feature, train_label.values.ravel(),
+                eval_set=[(valid_feature, valid_label.values.ravel())],
+                callbacks=[
+                    lightgbm.early_stopping(stopping_rounds=EARLY_STOPPING_ROUNDS, verbose=-1),
+                    lightgbm.log_evaluation(period=0)
+                ],
+                eval_metric="multi_logloss"
+            )
+            
+            best_iter = self.best_model.best_iteration_
+            test_pred_prob = self.best_model.predict_proba(test_feature, num_iteration=best_iter)
+            test_pred_label = np.argmax(test_pred_prob, axis=1)
+            
+            print(f"Performance on Test Set: {self.evaluate(test_pred_label, test_label, test_pred_prob)}")
+            print(f"Confusion Matrix:\n{pd.crosstab(test_label.values.ravel(), test_pred_label, rownames=['True'], colnames=['Predicted'])}")
+
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        suffix = "_sft" if self.sft else ""
+        save_path = f"{self.save_dir}/lgbm_{self.task[0].replace('_', '')}{suffix}_{timestamp}.pkl"
+        self.save_model(save_path)
         
         return self.best_model
     
@@ -180,13 +303,22 @@ class LGBM():
         recall = recall_score(true_label, pred_label, average='weighted', zero_division=0)
         f1 = f1_score(true_label, pred_label, average='weighted', zero_division=0)
         
+        cm = pd.crosstab(true_label.values.ravel(), pred_label, rownames=['True'], colnames=['Predicted'])
+        precision_0 = cm.loc[0, 0] / cm.loc[0, :].sum() if cm.loc[0, :].sum() > 0 else 0
+        recall_0 = cm.loc[0, 0] / cm.loc[:, 0].sum() if cm.loc[:, 0].sum() > 0 else 0
+        precision_2 = cm.loc[2, 2] / cm.loc[2, :].sum() if cm.loc[2, :].sum() > 0 else 0
+        recall_2 = cm.loc[2, 2] / cm.loc[:, 2].sum() if cm.loc[:, 2].sum() > 0 else 0
+        
         eval_results = {
             "auc": auc,
             "accuracy": acc,
             "precision": precision,
+            "precision_0": precision_0,
+            "precision_2": precision_2,
             "recall": recall,
+            "recall_0": recall_0,
+            "recall_2": recall_2,
             "f1_score": f1,
-            "log_loss": logloss
         }
         
         return eval_results

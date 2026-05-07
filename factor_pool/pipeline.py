@@ -31,10 +31,10 @@ class FactorPipeline:
     """
     def __init__(self, tick_df, date_range):
         if isinstance(tick_df, pd.DataFrame):
-            print("输入为 DataFrame，直接使用")
+            # print("输入为 DataFrame，直接使用")
             self.tick_df = tick_df
         elif isinstance(tick_df, list):
-            print(f"输入为 DataFrame 列表，长度: {len(tick_df)}，正在合并...")
+            # print(f"输入为 DataFrame 列表，长度: {len(tick_df)}，正在合并...")
             self.tick_df = pd.concat(tick_df, axis=0)
         else:
             raise ValueError("tick_df 应为 DataFrame 或 DataFrame 列表")
@@ -125,7 +125,7 @@ class FactorPipeline:
             # 并行计算方案A：在主进程预先切分数据，避免子进程重复拷贝巨大的 self.tick_df
             print("===预切分数据===")
             tasks = []
-            for date in self.date_range:
+            for date in tqdm(self.date_range, desc="预切分数据"):
                 day_data = self.tick_df[self.tick_df['date'].astype(str) == str(date)]
                 if not day_data.empty:
                     # 只保存必要的元组：(日期, 该日数据切片)

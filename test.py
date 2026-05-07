@@ -17,11 +17,11 @@ if __name__ == "__main__":
     predictor = DynamicClass()
     
     columns={}
-    with open("mmpc/config.json", encoding='utf-8') as a:
+    with open("/home1/zhuzhoufan/LWCUP/mmpc/config.json", encoding='utf-8') as a:
         columns = json.load(a)
     
     #加载数据
-    df = pd.read_parquet('snapshot_sym0_date0_am.parquet')
+    df = pd.read_parquet('/home1/zhuzhoufan/LWCUP/data/snapshot_sym0_date0_am.parquet')
     syms = df['sym'].unique()
     dates = df['date'].unique()
     predict_result = []

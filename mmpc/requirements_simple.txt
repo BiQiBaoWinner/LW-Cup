@@ -1,0 +1,10 @@
+# Core data processing
+numpy==2.4.3
+pandas==3.0.1
+
+# Machine Learning
+torch==2.10.0
+lightgbm==4.6.0
+
+# Model serialization
+joblib>=1.0.0

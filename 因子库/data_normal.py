@@ -1,3 +1,5 @@
+from calendar import c
+from numpy.core.defchararray import lower, upper
 import pandas as pd
 import pickle
 import os
@@ -6,42 +8,40 @@ tick_feature =  ['bid_rate1','bid_rate2','bid_rate3','bid_rate4','bid_rate5','bi
 raw_factor_list = day_feature + tick_feature
 ret_faature = ['label_5', 'label_10', 'label_20', 'label_40', 'label_60']
 
-def winsorize_series(s, q=0.01):
-    s = s.copy()
-    if s.isna().all():
-        return s
-    low = s.quantile(q)
-    high = s.quantile(1 - q)
-    s[s < low] = low
-    s[s > high] = high
-    
-    return s
 
-def standardize_series(s):
+def standardize_series(s,window=60):
+
     s = s.copy()
     if s.isna().all():
         return s
+    mean = s.rolling(window=window, min_periods=10).mean().shift(1)
+    std = s.rolling(window=window, min_periods=10).std().shift(1)
     
-    return (s - s.mean()) / (s.std() + 1e-8)
+    return (s - mean) / (std + 1e-8)
+
+def rolling_winsorize(series, window=60):
+
+    q05 = series.rolling(window=window, min_periods=10).quantile(0.05).shift(1)
+    q95 = series.rolling(window=window, min_periods=10).quantile(0.95).shift(1)
+        
+    series = series.clip(lower=q05,upper=q95)
+
+    return series
 
 def process_factors_separately(df):
     
     df = df.copy()
 
-    for col in tick_feature:
+    for col in raw_factor_list:
         if col in df.columns:
-            df[col] = df.groupby(["sym", "date"])[col].transform(winsorize_series)
+            print(col)
+            df[col] = df.groupby(["sym", "date"])[col].transform(rolling_winsorize)
             df[col] = df.groupby(["sym", "date"])[col].transform(standardize_series)
 
-
-    for col in day_feature:
-        df[col] = df.groupby("date")[col].transform(winsorize_series)
-        df[col] = df.groupby("date")[col].transform(standardize_series)
-
-    
     df = df.groupby('sym', group_keys=False).apply(
         lambda x: x.dropna(subset=raw_factor_list)
     )
+    
     return df
 
 

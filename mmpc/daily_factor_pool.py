@@ -6,7 +6,6 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
 	sys.path.append(project_root)
 
-from config import results_path
 from tick_factor_pool import tick_Orderbook_Imbalance_single_day
 
 
@@ -98,17 +97,5 @@ class DailyFactorPool:
 
 
 if __name__ == "__main__":
-	tot_tick_df = pd.read_parquet(f"{results_path}/merge_data/merge_data.parquet")
-
-	# 示例：计算目标日期 1 的日度因子，使用 date=0 的 tick 数据
-	target_date = '1'
-
-	daily_factor_pool_builder = DailyFactorPool(tot_tick_df)
-	daily_factor_pool_builder.register_factor(
-		factor_name='tick_OBI',
-		factor_func=daily_prevday_tick_OBI_mean,
-		need_cols=['bid1', 'ask1', 'bsize1', 'asize1']
-	)
-
-	daily_factor_pool = daily_factor_pool_builder.build_daily_factor_pool(target_date=target_date)
-	print(daily_factor_pool)
+	
+	pass
